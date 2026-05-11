@@ -58,7 +58,7 @@ After answering, do the following:
    - Filed to: [[qa/article-name]]
 """
 
-    prompt = f"""You are a knowledge base query engine. Answer the user's question by
+    static_context = f"""You are a knowledge base query engine. Answer the user's question by
 consulting the knowledge base below.
 
 ## How to Answer
@@ -73,8 +73,9 @@ consulting the knowledge base below.
 ## Knowledge Base
 
 {wiki_content}
+"""
 
-## Question
+    prompt = f"""## Question
 
 {question}
 {file_back_instructions}"""
@@ -87,7 +88,11 @@ consulting the knowledge base below.
             prompt=prompt,
             options=ClaudeAgentOptions(
                 cwd=str(ROOT_DIR),
-                system_prompt={"type": "preset", "preset": "claude_code"},
+                system_prompt={
+                    "type": "preset",
+                    "preset": "claude_code",
+                    "append": static_context,
+                },
                 allowed_tools=tools,
                 permission_mode="acceptEdits",
                 max_turns=15,

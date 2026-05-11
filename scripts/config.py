@@ -20,7 +20,7 @@ LOG_FILE = KNOWLEDGE_DIR / "log.md"
 STATE_FILE = SCRIPTS_DIR / "state.json"
 
 # ── Timezone ───────────────────────────────────────────────────────────
-TIMEZONE = "America/Chicago"
+TIMEZONE = "Asia/Manila"
 
 
 def now_iso() -> str:

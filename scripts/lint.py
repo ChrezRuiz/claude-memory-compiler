@@ -157,8 +157,8 @@ async def check_contradictions() -> list[dict]:
 
     wiki_content = read_all_wiki_content()
 
-    prompt = f"""Review this knowledge base for contradictions, inconsistencies, or
-conflicting claims across articles.
+    system_prompt = f"""You are a knowledge-base contradiction detector. Review the knowledge
+base below for contradictions, inconsistencies, or conflicting claims across articles.
 
 ## Knowledge Base
 
@@ -179,12 +179,15 @@ If no issues found, output exactly: NO_ISSUES
 
 Do NOT output anything else - no preamble, no explanation, just the formatted lines."""
 
+    prompt = "Review the knowledge base provided in the system prompt and report contradictions."
+
     response = ""
     try:
         async for message in query(
             prompt=prompt,
             options=ClaudeAgentOptions(
                 cwd=str(ROOT_DIR),
+                system_prompt=system_prompt,
                 allowed_tools=[],
                 max_turns=2,
             ),

@@ -24,7 +24,6 @@ from utils import (
     list_raw_files,
     list_wiki_articles,
     load_state,
-    read_wiki_index,
     save_state,
 )
 
@@ -46,85 +45,61 @@ async def compile_daily_log(log_path: Path, state: dict) -> float:
     )
 
     log_content = log_path.read_text(encoding="utf-8")
-    schema = AGENTS_FILE.read_text(encoding="utf-8")
-    wiki_index = read_wiki_index()
-
-    # Read existing articles for context
-    existing_articles_context = ""
-    existing = {}
-    for article_path in list_wiki_articles():
-        rel = article_path.relative_to(KNOWLEDGE_DIR)
-        existing[str(rel)] = article_path.read_text(encoding="utf-8")
-
-    if existing:
-        parts = []
-        for rel_path, content in existing.items():
-            parts.append(f"### {rel_path}\n```markdown\n{content}\n```")
-        existing_articles_context = "\n\n".join(parts)
-
     timestamp = now_iso()
 
-    prompt = f"""You are a knowledge compiler. Your job is to read a daily conversation log
+    static_context = f"""You are a knowledge compiler. Read a daily conversation log
 and extract knowledge into structured wiki articles.
 
-## Schema (AGENTS.md)
+## Reference files (Read these first, before writing anything)
 
-{schema}
+- **Schema:** `{AGENTS_FILE}` — article format spec (YAML frontmatter, sections, naming)
+- **Wiki catalog:** `{KNOWLEDGE_DIR / 'index.md'}` — list of all existing articles, summaries, sources
+- **Existing articles:** under `{CONCEPTS_DIR}` and `{CONNECTIONS_DIR}`.
+  Use Glob to enumerate, Read individual files when updating.
 
-## Current Wiki Index
+## Workflow
 
-{wiki_index}
-
-## Existing Wiki Articles
-
-{existing_articles_context if existing_articles_context else "(No existing articles yet)"}
-
-## Daily Log to Compile
-
-**File:** {log_path.name}
-
-{log_content}
-
-## Your Task
-
-Read the daily log above and compile it into wiki articles following the schema exactly.
-
-### Rules:
-
-1. **Extract key concepts** - Identify 3-7 distinct concepts worth their own article
-2. **Create concept articles** in `knowledge/concepts/` - One .md file per concept
-   - Use the exact article format from AGENTS.md (YAML frontmatter + sections)
-   - Include `sources:` in frontmatter pointing to the daily log file
-   - Use `[[concepts/slug]]` wikilinks to link to related concepts
-   - Write in encyclopedia style - neutral, comprehensive
-3. **Create connection articles** in `knowledge/connections/` if this log reveals non-obvious
-   relationships between 2+ existing concepts
-4. **Update existing articles** if this log adds new information to concepts already in the wiki
-   - Read the existing article, add the new information, add the source to frontmatter
-5. **Update knowledge/index.md** - Add new entries to the table
-   - Each entry: `| [[path/slug]] | One-line summary | source-file | {timestamp[:10]} |`
-6. **Append to knowledge/log.md** - Add a timestamped entry:
+1. Read AGENTS.md and knowledge/index.md before writing anything.
+2. Extract 3–7 distinct concepts from the daily log worth their own article.
+3. For each concept:
+   - **If a matching article already exists** (per the index) → Read it, then Edit
+     to merge new information; add the daily log filename to the `sources:` frontmatter
+     and bump `updated:`.
+   - **If new** → Write a new file in `{CONCEPTS_DIR}` following the AGENTS.md schema
+     (YAML frontmatter, encyclopedia-style prose, `[[concepts/slug]]` wikilinks).
+4. If the log reveals non-obvious links between 2+ existing concepts, write a
+   connection article in `{CONNECTIONS_DIR}`.
+5. Update `{KNOWLEDGE_DIR / 'index.md'}` — add a row for each new article using the
+   timestamp date from the user message:
+   `| [[path/slug]] | One-line summary | source-file | YYYY-MM-DD |`
+6. Append to `{KNOWLEDGE_DIR / 'log.md'}` using the timestamp from the user message:
    ```
-   ## [{timestamp}] compile | {log_path.name}
-   - Source: daily/{log_path.name}
+   ## [<timestamp>] compile | <log filename>
+   - Source: daily/<log filename>
    - Articles created: [[concepts/x]], [[concepts/y]]
    - Articles updated: [[concepts/z]] (if any)
    ```
 
-### File paths:
-- Write concept articles to: {CONCEPTS_DIR}
-- Write connection articles to: {CONNECTIONS_DIR}
-- Update index at: {KNOWLEDGE_DIR / 'index.md'}
-- Append log at: {KNOWLEDGE_DIR / 'log.md'}
+## Quality standards
 
-### Quality standards:
-- Every article must have complete YAML frontmatter
-- Every article must link to at least 2 other articles via [[wikilinks]]
-- Key Points section should have 3-5 bullet points
-- Details section should have 2+ paragraphs
-- Related Concepts section should have 2+ entries
-- Sources section should cite the daily log with specific claims extracted
+- Complete YAML frontmatter (title, sources, created, updated, tags, aliases)
+- At least 2 `[[wikilinks]]` to other articles
+- Key Points: 3–5 bullets; Details: 2+ paragraphs; Related Concepts: 2+ entries
+- Sources section cites the daily log with specific claims extracted
+- **IMPORTANT:** Reference daily logs as plain text `daily/YYYY-MM-DD.md` —
+  do NOT use `[[daily/...]]` wikilinks (daily/ is at vault root, not under knowledge/,
+  so wikilinks break).
 """
+
+    prompt = f"""## Daily Log to Compile
+
+**File:** {log_path.name}
+**Timestamp:** {timestamp}
+
+{log_content}
+
+Compile this log per the rules in the system prompt. Use the timestamp above for the
+index row date and the `log.md` entry header."""
 
     cost = 0.0
 
@@ -133,7 +108,11 @@ Read the daily log above and compile it into wiki articles following the schema 
             prompt=prompt,
             options=ClaudeAgentOptions(
                 cwd=str(ROOT_DIR),
-                system_prompt={"type": "preset", "preset": "claude_code"},
+                system_prompt={
+                    "type": "preset",
+                    "preset": "claude_code",
+                    "append": static_context,
+                },
                 allowed_tools=["Read", "Write", "Edit", "Glob", "Grep"],
                 permission_mode="acceptEdits",
                 max_turns=30,

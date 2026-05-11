@@ -8,6 +8,7 @@ scripts/state.json
 scripts/last-flush.json
 scripts/flush.log
 scripts/compile.log
+scripts/compile-scheduled.bat
 scripts/session-flush-*
 scripts/flush-context-*
 
@@ -29,3 +30,16 @@ scripts/uv.lock
 Thumbs.db
 
 .obsidian/
+
+# FERDG vault content (not part of memory-compiler code)
+FERDG/
+standards/
+Templates/
+Miscellaneous/
+Attachments/
+weekly/
+FERDG Notes.md
+*.pptx
+
+# MCP config (may contain server tokens / personal paths)
+.mcp.json
